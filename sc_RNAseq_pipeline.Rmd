@@ -1,0 +1,21 @@
+---
+title: "singlecell_Seurat_pipeline"
+output: html_document
+date: "2023-02-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Single-cell RNA-Seq analysis pipeline (GEO format)
+
+This is a pipeline to analyze single-cell RNA Seq data from GEO
+In this script the single cell RNA-Seq results from this paper is regenerated:
+https://pubmed.ncbi.nlm.nih.gov/34956864/
+Title: Bulk and Single-Cell Profiling of Breast Tumors Identifies TREM-1 as a 
+Dominant Immune Suppressive Marker Associated With Poor Outcomes
+
+```{r cars}
+summary(cars)
+```
