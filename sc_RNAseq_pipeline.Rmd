@@ -1,10 +1,10 @@
 ---
 title: "singlecell_Seurat_pipeline"
+author: "Negar Sadeghipour"
 output:
-  pdf_document : default
   html_document: default
+  pdf_document : default
   word_document: default
-  geometry: margin=0.75in
 date: "2023-02-12"
 ---
 
