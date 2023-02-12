@@ -2,15 +2,16 @@
 title: "singlecell_Seurat_pipeline"
 output:
   html_document: default
+  word_document: default
   pdf_document: default
 date: "2023-02-12"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, tidy = FALSE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, tidy = FALSE, eval=TRUE)
 ```
 
-## Single-cell RNA-Seq analysis pipeline (GEO format)
+## Single-cell RNA-Seq analysis pipeline (GEO dataset)
 
 This is a pipeline to analyze single-cell RNA Seq data from GEO.
 In this script the single cell RNA-Seq results from this paper is regenerated:
@@ -26,14 +27,14 @@ library(GEOquery)
 ```
 
 ## 0. Fetch data from GEO
-#### No need to perform the following two lines next time, as the folders are already created.
+#### Note: No need to fetch the data if it is already created
 ```{r Fetch data from GEO, message=FALSE, warning=FALSE, tidy=FALSE}
 file <- getGEOSuppFiles("GSE188600")
 untar("GSE188600/GSE188600_RAW.tar", exdir = 'data/')
 ```
 
 ## 1. Create the counts matrix
-#### find the files in data folder (i.e., barcodes, features, matrix)
+#### Find the files in data folder (i.e., barcodes, features, matrix)
 ```{r Create the count matrix, message=FALSE, warning=FALSE, tidy=FALSE}
 wd = getwd()
 files = list.files(path = paste0(wd, '/data'), full.names = FALSE, recursive = FALSE)
@@ -43,7 +44,7 @@ mtx.cnts <- ReadMtx(mtx = paste0('data/', files[3]),
                 cells = paste0('data/', files[1]))
 ```
 
-## 2. create a seurat object
+## 2. Create a seurat object
 ```{r Seurat object}
 Seurat.obj <- CreateSeuratObject(counts = mtx.cnts)
 
@@ -52,27 +53,27 @@ Seurat.obj
 
 ## 3. QC and filtering
 
-### view Seurat object meta data
-```{r view meta data}
-view(Seurat.obj@meta.data)
+### View Seurat object meta data
+```{r view meta data, echo = FALSE}
+Seurat.obj@meta.data[1:10,]
 ```
 
-## 3.1 calculate mitochondrial percentage 
-#### high percentage shows bad quality
+## 3.1 Calculate mitochondrial percentage 
+#### High percentage shows bad quality
 
 ```{r create mitochondrial percentage column}
 Seurat.obj$mito.prct <- PercentageFeatureSet(Seurat.obj, pattern = '^MT-')
 ```
 
-## 3.2 explore QC 
-#### plot feature and RNA counts and mitochondial percentage
+## 3.2 Explore QC 
+#### Plot feature and RNA counts and mitochondial percentage
 ```{r explore the QC plots}
 VlnPlot(Seurat.obj, features = c("nFeature_RNA", "nCount_RNA", "mito.prct"), ncol = 3)
 FeatureScatter(Seurat.obj, feature1 = "nCount_RNA", feature2 = "nFeature_RNA") +
   geom_smooth(method = 'lm')
 ```
 
-## 3.3 filtering cells 
+## 3.3 Filter cells 
 #### more than 800 RNA count and more than 500 genes and less than 10 mitochondrial%  
 ```{r filter data}
 Seurat.obj.filt <- subset(Seurat.obj, subset = nCount_RNA >800 &
@@ -82,11 +83,14 @@ Seurat.obj.filt <- subset(Seurat.obj, subset = nCount_RNA >800 &
 
 ## 4. Finding Variable genes
 #### note: This data set contains one sample, if more than 1 sample was used correction for potential batch effects should be considered
+
+### 4.1 Normalize data
 ```{r normalize data}
 Seurat.obj.filt <- NormalizeData(object = Seurat.obj.filt)
 ```
 
-#### variable genes - with visualization of top 10 variable genes
+### 4.2 Find variable genes
+#### with visualization of top 10 variable genes
 ```{r variable genes}
 Seurat.obj.filt <- FindVariableFeatures(object = Seurat.obj.filt, selection.method = 'vst', nfeatures = 2000)
 
@@ -97,139 +101,148 @@ LabelPoints(plot = plot1, points = top10, repel = TRUE)
 ```
 
 ## 5. Clustering the cells
-#### scaling the data
+### 5.1 Scale the data
 ```{r scaling data}
 Seurat.obj.filt <- ScaleData(object = Seurat.obj.filt)
 ```
-#### perform linear dimensionality reduction
+### 5.2 Perform linear dimensionality reduction
 ```{r perform linear dimensionality reduction}
 Seurat.obj.filt <- RunPCA(object = Seurat.obj.filt, features = VariableFeatures((Seurat.obj.filt)))
 ```
-#### selecting the PCA plots with elbow plot
+### 5.3 Select the PCA plots with elbow plot
 ```{r elbow plot}
 ElbowPlot(Seurat.obj.filt, ndims = 35)
 ```
 
-#### Find Neighbors
+### 5.4 Find Neighbors
 ```{r finding neighbors}
 Seurat.obj.filt <- FindNeighbors(object = Seurat.obj.filt, dim = 1:20)
 ```
 
-### understanding the resolution
+### 5.5 Understand the resolution
 ```{r selecting the resolution}
 Seurat.obj.filt <- RunUMAP(object = Seurat.obj.filt, dim = 1:20)
 Seurat.obj.filt <- FindClusters(object = Seurat.obj.filt, resolution = c(0.01, 0.1, 0.3, 0.5, 0.8, 1, 1.2))
 ```
 
-### This resolution should be changed until the correct number of clusters are achieved
+### 5.6 Optimize the resolution
+#### This resolution should be changed until the correct number of clusters are achieved
 ```{r optimizing resolution}
 DimPlot(Seurat.obj.filt, group.by = 'RNA_snn_res.0.5', label = TRUE)
 ```
 
-#### setting identity of clusters
-```{r }
+### 5.7 Set identity of clusters
+```{r set clusters identity}
 Seurat.obj.filt <- RunUMAP(object = Seurat.obj.filt, dim = 1:20)
 Seurat.obj.filt <- RunTSNE(object = Seurat.obj.filt, dims = 1:20)
 Idents(Seurat.obj.filt) <- 'RNA_snn_res.0.5'
 ```
 
-### umap observation
+### 5.8 umap observation
 ```{r UMAP observation}
 DimPlot(Seurat.obj.filt, reduction = 'umap', label = TRUE)
 ```
 
-### tsne observation
+### 5.9 tsne observation
 ```{r tsne observation}
 DimPlot(Seurat.obj.filt, reduction = 'tsne' , label = TRUE)
 ```
 
-## Find optimal number of clusters
+## 6. Annotate the clusters
+### 6.1 Find the assay type
 ```{r assay type}
 DefaultAssay(Seurat.obj.filt) # make sure it is RNA
 ```
 
-#### find markers for every cluster compared to all remaining cells, report only the positive ones
+### 6.2 Find the differentially expressed markers
+#### Find markers for every cluster compared to all remaining cells, report only the positive ones
 ```{r find all markers for clusters}
 Seurat.obj.filt.markers <- FindAllMarkers(Seurat.obj.filt, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
 ```
 
-#### select top (4 -> can be changed) upregulated genes in each cluster
+### 6.2 Select top (4 -> can be changed) upregulated genes in each cluster
 ```{r select DE genes in each cluster}
 clust.markers <- Seurat.obj.filt.markers %>%
   group_by(cluster) %>%
   slice_max(n = 4, order_by = avg_log2FC)
 ```
 
-## 6. Steps to complete the annotation
-
-### Visualize top upregulated genes in each cluster
+### 6.3 Visualize top upregulated genes in each cluster
 ```{r gene visualization}
 DoHeatmap(Seurat.obj.filt, features = clust.markers$gene, size = 4,
           angle = 90)
 ```
 
-## Ridge plots - from ggridges. 
+### 6.4 Ridge plots - from ggridges. 
 #### Visualize single cell expression distributions in each cluster
-```{r}
-RidgePlot(Seurat.obj.filt, features = clust.markers$gene, ncol = 6)
+```{r ridge plots, fig.width=25,fig.height=25}
+RidgePlot(Seurat.obj.filt, features = clust.markers$gene, ncol = 4)
 ```
 
 
-## Violin plot
+### 6.5 Violin plot
 #### Visualize single cell expression distributions in each cluster
-```{r}
+```{r violin plots, fig.width=25, fig.height=25}
 VlnPlot(Seurat.obj.filt, features = clust.markers$gene, ncol = 4)
 ```
 
-## Feature plot 
+### 6.6 Feature plot 
 #### visualize feature expression in low-dimensional space
-```{r}
+```{r feature plots, , fig.width=25, fig.height = 20}
 FeaturePlot(Seurat.obj.filt, features = clust.markers$gene, ncol = 4)
 ```
 
-## Check individual feature
-```{r}
+### 6.7 Check the individual feature
+#### Use for optimization of annotating
+```{r individual feature plots}
 FeaturePlot(Seurat.obj.filt, features = c('CD163'), min.cutoff = 'q10')
 ```
 
-#### feature plots (feature identification based on up-reg genes and pangloadb)
-```{r}
+### 6.8 Select the top features
+#### Feature identification based on up-reg genes and pangloadb
+```{r selecting the features}
 features <- c("CST3", "CD86", "SPP1", "C1QA", "CTHRC1", "MGP", "CXCL13", "TNFRSF18", "JCHAIN", "IGKC",
               "NKG7", "GNLY", "IL7R", "RPL34", "STMN1", "KIAA0101")
 ```
 
-## assigning the new clusters to data
-```{r}
+### 6.9 Assign the new clusters to data
+```{r assigning the cluster names}
 new.cluster.ids <- c("Mature DC", "DC", "Fibroblast", "T cell", "Immature DC",
                      "NK cells", "Naive T cell", "TNBC")
 ```
-# view new plot with cluster names
-```{r}
+
+## 7. Visulization
+
+### 7.1 View annotated clusters
+```{r visualization of annotated clusters}
 names(new.cluster.ids) <- levels(Seurat.obj.filt)
 Seurat.obj.filt <- RenameIdents(Seurat.obj.filt, new.cluster.ids)
 DimPlot(Seurat.obj.filt, reduction = "umap", label = TRUE, pt.size = 0.5) + NoLegend()
 DimPlot(Seurat.obj.filt, reduction = "umap")
 ```
 
-#### Single cell heatmap of feature expression
-```{r}
+### 7.2 Single cell heatmap of features expression
+```{r heatmap of features expression}
 DoHeatmap(subset(Seurat.obj.filt, downsample = 700), features = features, size = 3)
 ```
-# Feature plot - visualize feature expression in low-dimensional space
-```{r}
+
+### 7.3 Feature plot 
+#### Visualize feature expression in low-dimensional space
+```{r, fig.height=15, fig.width=25}
 FeaturePlot(Seurat.obj.filt, features = features, ncol = 4)
 ```
 
-# select top (8 -> can be changed) upregulated genes in each cluster
-```{r}
+### 7.4 Heatmap plot
+#### Select top (6 -> can be changed) upregulated genes in each cluster
+```{r, fig.height=10, fig.width = 20}
 top.features <- Seurat.obj.filt.markers %>%
   group_by(cluster) %>%
   slice_max(n = 6, order_by = avg_log2FC)
 DoHeatmap(subset(Seurat.obj.filt, downsample = 700), features = top.features$gene, size = 3)
 ```
 
-# Dot plots - the size of the dot corresponds to the percentage of cells expressing the
-# feature in each cluster. The color represents the average expression level
-```{r}
+### 7.5 Dot plots
+#### the size of the dot corresponds to the percentage of cells expressing the feature in each cluster. The color represents the average expression level
+```{r dotplot representation of features, fig.width=10}
 DotPlot(Seurat.obj.filt, features = features) + RotatedAxis()
 ```
